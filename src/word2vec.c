@@ -16,6 +16,7 @@
 
 #include <R.h>
 #include <Rinternals.h>
+#include <Rdefines.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -28,13 +29,6 @@
 #define MAX_EXP 6
 #define MAX_SENTENCE_LENGTH 1000
 #define MAX_CODE_LENGTH 40
-
-#ifndef NDEBUG
-#define malloc(s)    (my_malloc(s))
-void *my_malloc(size_t size) {
-	return NULL;
-}
-#endif
 
 const int VOCAB_HASH_SIZE = 30000000;  // Maximum 30 * 0.7 = 21M words in the vocabulary
 
@@ -82,6 +76,7 @@ static struct configs *init_configs() {
 	res->read_vocab_file[0] = 0;
 	res->window = 5;
 	res->min_count = 5;
+	res->negative = 0;
 
 	return res;
 }
@@ -796,11 +791,32 @@ static int train_model(const char* input, const char* output) {
 	return 0;
 }
 
-SEXP train(SEXP input, SEXP output) {
+SEXP train(SEXP Rtrain_file, SEXP Routput_file, SEXP Rlayer1_size, SEXP Rcbow,
+            SEXP Rhs, SEXP Rnegative, SEXP Rmin_count, SEXP Ralpha) {
 	SEXP res;
+	struct configs *conf = init_configs();
+	PROTECT(Rlayer1_size = AS_INTEGER(Rlayer1_size));
+  PROTECT(Rcbow = AS_INTEGER(Rcbow));
+  PROTECT(Rhs = AS_INTEGER(Rhs));
+  PROTECT(Rnegative = AS_INTEGER(Rnegative));
+  PROTECT(Rmin_count = AS_INTEGER(Rmin_count));
+  PROTECT(Ralpha = AS_NUMERIC(Ralpha));
+
+  strcpy(conf->train_file, CHAR(STRING_ELT(Rtrain_file, 0)));
+  strcpy(conf->output_file, CHAR(STRING_ELT(Routput_file, 0)));
+	conf->layer1_size = *(INTEGER_POINTER(Rlayer1_size));
+  conf->cbow = *(INTEGER_POINTER(Rcbow));
+  conf->hs = *(INTEGER_POINTER(Rhs));
+  conf->negative = *(INTEGER_POINTER(Rnegative));
+  conf->min_count = *(INTEGER_POINTER(Rmin_count));
+  conf->alpha = *(NUMERIC_POINTER(Ralpha));
+
+	train_model_with_config(conf);
+
 	PROTECT(res = allocVector(INTSXP, 1));
-	train_model(CHAR(STRING_ELT(input, 0)), CHAR(STRING_ELT(output, 0)));
 	INTEGER(res)[0] = 0;
-	UNPROTECT(1);
+
+	UNPROTECT(7);
+	free(conf);
 	return(res);
 }
