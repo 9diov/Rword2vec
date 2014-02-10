@@ -1,0 +1,3 @@
+useDynLib(word2vec)
+
+export(train.vectors, read.vectors)
