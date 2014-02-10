@@ -18,13 +18,11 @@ Version: \tab 1.0\cr
 Date: \tab 2014-02-07\cr
 License: \tab Apache License Version 2.0\cr
 }
-~~ An overview of how to use the package, including the most important ~~
-~~ functions ~~
 }
 \author{
 Thanh Dinh Khac
 
-Maintainer: Who to complain to <yourfault@somewhere.net>
+Maintainer: Thanh Dinh Khac <thanh.dinhkhac@revolutionanalytics.com>
 }
 \references{
 ~~ Literature or other references for background information ~~
@@ -33,7 +31,6 @@ Maintainer: Who to complain to <yourfault@somewhere.net>
 ~~ the R documentation directory ~~
 \keyword{ package }
 \seealso{
-~~ Optional links to other man pages, e.g. ~~
 ~~ \code{\link[<pkg>:<pkg>-package]{<pkg>}} ~~
 }
 \examples{
