@@ -21,12 +21,20 @@
 #include <string.h>
 #include <math.h>
 #include <time.h>
+#include <malloc.h>
 
 #define MAX_STRING 100
 #define EXP_TABLE_SIZE 1000
 #define MAX_EXP 6
 #define MAX_SENTENCE_LENGTH 1000
 #define MAX_CODE_LENGTH 40
+
+#ifndef NDEBUG
+#define malloc(s)    (my_malloc(s))
+void *my_malloc(size_t size) {
+	return NULL;
+}
+#endif
 
 const int VOCAB_HASH_SIZE = 30000000;  // Maximum 30 * 0.7 = 21M words in the vocabulary
 
@@ -53,24 +61,29 @@ struct configs {
 	clock_t start;
 };
 
-static void InitConfigs(struct configs *o) {
-	o->num_threads = 1;
-	o->classes = 0;
-	o->file_size = 0;
-	o->train_words = 0;
-	o->word_count_actual = 0;
-	o->layer1_size = 100;
-	o->debug_mode = 2;
-	o->binary = 1;
-	o->cbow = 0;
-	o->hs = 1;
-	o->alpha =0.025;
-	o->sample = 0;
-	o->output_file[0] = 0;
-	o->save_vocab_file[0] = 0;
-	o->read_vocab_file[0] = 0;
-	o->window = 5;
-	o->min_count = 5;
+static struct configs *init_configs() {
+	struct configs *res = malloc(sizeof(struct configs));
+	if (res == NULL) { error("Failed to allocate memory for configuration data"); }
+
+	res->num_threads = 1;
+	res->classes = 0;
+	res->file_size = 0;
+	res->train_words = 0;
+	res->word_count_actual = 0;
+	res->layer1_size = 100;
+	res->debug_mode = 2;
+	res->binary = 1;
+	res->cbow = 0;
+	res->hs = 1;
+	res->alpha =0.025;
+	res->sample = 0;
+	res->output_file[0] = 0;
+	res->save_vocab_file[0] = 0;
+	res->read_vocab_file[0] = 0;
+	res->window = 5;
+	res->min_count = 5;
+
+	return res;
 }
 
 struct vocab_word {
@@ -87,24 +100,31 @@ struct vocab {
 	int *vocab_hash;
 };
 
-static void InitVocab(struct vocab* v) {
+static struct vocab *init_vocab() {
+	struct vocab *v = malloc(sizeof(struct vocab));
+	if (v == NULL) { error("Failed to allocate memory for vocabulary data"); }
 	v->vocab_MAX_SIZE = 1000;
 	v->min_reduce = 1;
 	v->vocab = (struct vocab_word *)calloc(v->vocab_MAX_SIZE, sizeof(struct vocab_word));
 	v->vocab_hash = (int *)calloc(VOCAB_HASH_SIZE, sizeof(int));
+	return v;
 }
 
 struct net {
 	real *syn0, *syn1, *syn1neg, *expTable;
 };
 
-static void InitNetData(struct net *n) {
+static struct net *init_net_data() {
+	struct net *n = malloc(sizeof(struct net));
+	if (n == NULL) { error("Failed to allocate memory for neural net data"); }
 	int i;
 	n->expTable = (real *)malloc((EXP_TABLE_SIZE + 1) * sizeof(real));
+	if (n->expTable == NULL) { error("Failed to allocate memory for exp look up table"); }
 	for (i = 0; i < EXP_TABLE_SIZE; i++) {
 		n->expTable[i] = exp((i / (real)EXP_TABLE_SIZE * 2 - 1) * MAX_EXP); // Precompute the exp() table
 		n->expTable[i] = n->expTable[i] / (n->expTable[i] + 1);                   // Precompute f(x) = x / (x + 1)
 	}
+	return n;
 }
 
 struct all_data {
@@ -120,6 +140,7 @@ static void InitUnigramTable(int *table, struct vocab *v) {
 	long long train_words_pow = 0;
 	real d1, power = 0.75;
 	table = (int *)malloc(TABLE_SIZE * sizeof(int));
+	if (table == NULL) { error("Failed to allocate memory for unigram table"); }
 	for (a = 0; a < v->vocab_size; a++) train_words_pow += pow(v->vocab[a].cn, power);
 	i = 0;
 	d1 = pow(v->vocab[i].cn, power) / (real)train_words_pow;
@@ -352,10 +373,6 @@ int LearnVocabFromTrainFile(struct vocab *v, struct configs *o) {
 		} else v->vocab[i].cn++;
 		if (v->vocab_size > VOCAB_HASH_SIZE * 0.7) ReduceVocab(v);
 	}
-	if (o->debug_mode > 0) {
-		Rprintf("Vocab size: %lld\n", v->vocab_size);
-		Rprintf("Words in train file: %lld\n", o->train_words);
-	}
 	SortVocab(v, o);
 	if (o->debug_mode > 0) {
 		Rprintf("Vocab size: %lld\n", v->vocab_size);
@@ -363,7 +380,6 @@ int LearnVocabFromTrainFile(struct vocab *v, struct configs *o) {
 	}
 	o->file_size = ftell(fin);
 	fclose(fin);
-	Rprintf("Learn vocab done\n");
 	return 0;
 }
 
@@ -380,8 +396,7 @@ static void ReadVocab(struct vocab *v, struct configs *o) {
 	char word[MAX_STRING];
 	FILE *fin = fopen(o->read_vocab_file, "rb");
 	if (fin == NULL) {
-		Rprintf("Vocabulary file not found\n");
-		exit(1);
+		error("Vocabulary file not found\n");
 	}
 	for (a = 0; a < VOCAB_HASH_SIZE; a++) v->vocab_hash[a] = -1;
 	v->vocab_size = 0;
@@ -403,8 +418,7 @@ static void ReadVocab(struct vocab *v, struct configs *o) {
 	}
 	fin = fopen(o->train_file, "rb");
 	if (fin == NULL) {
-		Rprintf("ERROR: training data file not found!\n");
-		exit(1);
+		error("Training data file not found.\n");
 	}
 	fseek(fin, 0, SEEK_END);
 	o->file_size = ftell(fin);
@@ -414,28 +428,28 @@ static void ReadVocab(struct vocab *v, struct configs *o) {
 static void InitNet(struct net *n, struct vocab *v, struct configs *o) {
 	long long a, b;
 #ifdef _WIN32
-	n->syn0 = (real *)malloc((long long)v->vocab_size * o->layer1_size * sizeof(real));
-#elif __posix
+	n->syn0 = (real *)_aligned_malloc((long long)v->vocab_size * o->layer1_size * sizeof(real), 128);
+#else
 	a = posix_memalign((void **)&(n->syn0), 128, (long long)v->vocab_size * o->layer1_size * sizeof(real));
 #endif
-	if (n->syn0 == NULL) {Rprintf("Memory allocation failed\n"); exit(1);}
+	if (n->syn0 == NULL) { error("Failed to allocate memory for neural net"); }
 	if (o->hs) {
 #ifdef _WIN32
-		n->syn1 = (real *)malloc((long long)v->vocab_size * o->layer1_size * sizeof(real));
-#elif __posix
+		n->syn1 = (real *)_aligned_malloc((long long)v->vocab_size * o->layer1_size * sizeof(real), 128);
+#else
 		a = posix_memalign((void **)&(n->syn1), 128, (long long)v->vocab_size * o->layer1_size * sizeof(real));
 #endif
-		if (n->syn1 == NULL) {Rprintf("Memory allocation failed\n"); exit(1);}
+		if (n->syn1 == NULL) { error("Failed to allocate memory for neural net"); }
 		for (b = 0; b < o->layer1_size; b++) for (a = 0; a < v->vocab_size; a++)
 			n->syn1[a * o->layer1_size + b] = 0;
 	}
 	if (o->negative>0) {
 #ifdef _WIN32
-		n->syn1neg = (real *)malloc((long long)v->vocab_size * o->layer1_size * sizeof(real));
-#elif __posix
+		n->syn1neg = (real *)_aligned_malloc((long long)v->vocab_size * o->layer1_size * sizeof(real), 128);
+#else
 		a = posix_memalign((void **)&(n->syn1neg), 128, (long long)v->vocab_size * o->layer1_size * sizeof(real));
 #endif
-		if (n->syn1neg == NULL) {Rprintf("Memory allocation failed\n"); exit(1);}
+		if (n->syn1neg == NULL) { error("Failed to allocate memory for neural net"); }
 		for (b = 0; b < o->layer1_size; b++) for (a = 0; a < v->vocab_size; a++)
 			n->syn1neg[a * o->layer1_size + b] = 0;
 	}
@@ -621,7 +635,8 @@ static void TrainModelThread(struct all_data *global_data) {
 	/*pthread_exit(NULL);*/
 }
 
-static void TrainModel(struct vocab *v, struct net *n, int *table, struct configs *o) {
+static void TrainModel(struct vocab *v, struct net *n, struct configs *o) {
+	int *table = NULL;
 	long a, b, c, d;
 	FILE *fo;
 	/*pthread_t *pt = (pthread_t *)malloc(o->num_threads * sizeof(pthread_t));*/
@@ -639,6 +654,7 @@ static void TrainModel(struct vocab *v, struct net *n, int *table, struct config
 	o->start = clock();
 	for (a = 0; a < o->num_threads; a++) {
 		struct all_data *data = malloc(sizeof(struct all_data));
+		if (data == NULL) { error("Failed to allocate memory"); }
 		data->v = v;
 		data->n = n;
 		data->table = table;
@@ -703,6 +719,7 @@ static void TrainModel(struct vocab *v, struct net *n, int *table, struct config
 		free(cl);
 	}
 	fclose(fo);
+	free(table);
 }
 
 SEXP load_vectors(SEXP filepath) {
@@ -720,6 +737,7 @@ SEXP load_vectors(SEXP filepath) {
 	fscanf(f, "%lld", &(data.words));
 	fscanf(f, "%lld", &(data.size));
 	data.vocab = (char *)malloc((long long)(data.words) * MAX_W * sizeof(char));
+	if (data.vocab == NULL) { error("Failed to allocate memory for vocabulary data"); }
 	data.M = (float *)malloc((long long)(data.words) * (long long)(data.size) * sizeof(float));
 	if (data.M == NULL) {
 		Rprintf("Cannot allocate memory: %lld MB    %lld  %lld\n", (long long)(data.words) * data.size * sizeof(float) / 1048576, data.words, data.size);
@@ -757,24 +775,24 @@ SEXP load_vectors(SEXP filepath) {
 }
 
 static int train_model_with_config(struct configs *o) {
-	struct vocab *v = malloc(sizeof(struct vocab));
-	InitVocab(v);
+	struct vocab *vocab = init_vocab();
+	struct net *net = init_net_data();
 
-	struct net *n = malloc(sizeof(struct net));
-	InitNetData(n);
+	TrainModel(vocab, net, o);
 
-	int *table = NULL;
-	TrainModel(v, n, table, o);
+	free(vocab);
+	free(net);
 	return 0;
 }
 
 static int train_model(const char* input, const char* output) {
-	struct configs *o = malloc(sizeof(struct configs));
-	InitConfigs(o);
+	struct configs *o = init_configs();
 	strcpy(o->train_file, input);
 	strcpy(o->output_file, output);
 
 	train_model_with_config(o);
+
+	free(o);
 	return 0;
 }
 
@@ -786,8 +804,3 @@ SEXP train(SEXP input, SEXP output) {
 	UNPROTECT(1);
 	return(res);
 }
-
-/*int main() {*/
-	/*train_model("text8", "vectors_test.bin");*/
-	/*return 0;*/
-/*}*/
