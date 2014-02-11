@@ -796,20 +796,20 @@ SEXP train(SEXP Rtrain_file, SEXP Routput_file, SEXP Rlayer1_size, SEXP Rcbow,
 	SEXP res;
 	struct configs *conf = init_configs();
 	PROTECT(Rlayer1_size = AS_INTEGER(Rlayer1_size));
-  PROTECT(Rcbow = AS_INTEGER(Rcbow));
-  PROTECT(Rhs = AS_INTEGER(Rhs));
-  PROTECT(Rnegative = AS_INTEGER(Rnegative));
-  PROTECT(Rmin_count = AS_INTEGER(Rmin_count));
-  PROTECT(Ralpha = AS_NUMERIC(Ralpha));
+	PROTECT(Rcbow = AS_INTEGER(Rcbow));
+	PROTECT(Rhs = AS_INTEGER(Rhs));
+	PROTECT(Rnegative = AS_INTEGER(Rnegative));
+	PROTECT(Rmin_count = AS_INTEGER(Rmin_count));
+	PROTECT(Ralpha = AS_NUMERIC(Ralpha));
 
-  strcpy(conf->train_file, CHAR(STRING_ELT(Rtrain_file, 0)));
-  strcpy(conf->output_file, CHAR(STRING_ELT(Routput_file, 0)));
+	strcpy(conf->train_file, CHAR(STRING_ELT(Rtrain_file, 0)));
+	strcpy(conf->output_file, CHAR(STRING_ELT(Routput_file, 0)));
 	conf->layer1_size = *(INTEGER_POINTER(Rlayer1_size));
-  conf->cbow = *(INTEGER_POINTER(Rcbow));
-  conf->hs = *(INTEGER_POINTER(Rhs));
-  conf->negative = *(INTEGER_POINTER(Rnegative));
-  conf->min_count = *(INTEGER_POINTER(Rmin_count));
-  conf->alpha = *(NUMERIC_POINTER(Ralpha));
+	conf->cbow = *(INTEGER_POINTER(Rcbow));
+	conf->hs = *(INTEGER_POINTER(Rhs));
+	conf->negative = *(INTEGER_POINTER(Rnegative));
+	conf->min_count = *(INTEGER_POINTER(Rmin_count));
+	conf->alpha = *(NUMERIC_POINTER(Ralpha));
 
 	train_model_with_config(conf);
 
